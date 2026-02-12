@@ -46,14 +46,14 @@ export default function JobFeedPage() {
     if (savedJobs) {
       try {
         const jobs = JSON.parse(savedJobs);
-        const signatures = new Set(
-          jobs.map((j: any) => {
-             const role = j.title || j.role || ""; 
-             const company = j.company || "";
-             return `${company.toLowerCase().trim()}|${role.toLowerCase().trim()}`;
-          })
-        );
-        setTrackedSignatures(signatures);
+const signatures = new Set<string>(
+  (jobs as any[]).map((j: any) => {
+    const role = j.title || j.role || ""; 
+    const company = j.company || "";
+    return `${company.toLowerCase().trim()}|${role.toLowerCase().trim()}` as string;
+  })
+);
+setTrackedSignatures(signatures);
       } catch (e) {
         console.error(e);
       }
