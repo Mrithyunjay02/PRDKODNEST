@@ -37,28 +37,32 @@ export default function JobFeedPage() {
   const [userPrefs, setUserPrefs] = useState<any>(null);
 
   useEffect(() => {
-    // Load Profile
-    const profile = localStorage.getItem("user_profile");
-    if (profile) setUserPrefs(JSON.parse(profile));
-
-    // Load Tracked Jobs
-    const savedJobs = localStorage.getItem("my_jobs");
-    if (savedJobs) {
-      try {
-        const jobs = JSON.parse(savedJobs);
-const signatures = new Set<string>(
-  (jobs as any[]).map((j: any) => {
-    const role = j.title || j.role || ""; 
-    const company = j.company || "";
-    return `${company.toLowerCase().trim()}|${role.toLowerCase().trim()}` as string;
-  })
-);
-setTrackedSignatures(signatures);
-      } catch (e) {
-        console.error(e);
+    // 1. Add this check to make sure we are in the browser
+    if (typeof window !== "undefined") {
+      
+      // Load Profile
+      const profile = localStorage.getItem("user_profile");
+      if (profile) setUserPrefs(JSON.parse(profile));
+  
+      // Load Tracked Jobs
+      const savedJobs = localStorage.getItem("my_jobs");
+      if (savedJobs) {
+        try {
+          const jobs = JSON.parse(savedJobs);
+          const signatures = new Set<string>(
+            jobs.map((j: any) => {
+               const role = j.title || j.role || ""; 
+               const company = j.company || "";
+               return `${company.toLowerCase().trim()}|${role.toLowerCase().trim()}` as string;
+            })
+          );
+          setTrackedSignatures(signatures);
+        } catch (e) {
+          console.error("Failed to parse jobs:", e);
+        }
       }
     }
-  }, []);
+  }, []); 
 
   const calculateRelevance = (job: any) => {
     if (!userPrefs) return 50;
