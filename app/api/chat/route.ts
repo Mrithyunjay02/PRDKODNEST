@@ -34,8 +34,7 @@ Generate a complete, professional resume now:`;
         },
       ],
       temperature: 0.7,
-      maxTokens: 2000,
-    });
+      maxOutputTokens: 2000, // ✅ Correct parameter name    });
 
     return result.toDataStreamResponse();
   } catch (error) {
