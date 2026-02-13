@@ -12,10 +12,11 @@ import {
   ExternalLink
 } from "lucide-react";
 
-// 🔥 YOUR REAL API KEY IS INTEGRATED HERE 🔥
-const RAPID_API_KEY = process.env.X_RAPIDAPI_KEY;
+// 🔥 NOTE: For this to work in the browser, ensure your env var is NEXT_PUBLIC_X_RAPIDAPI_KEY in Netlify
+// If not, it will gracefully default to the FALLBACK_JOBS which is fine for the demo.
+const RAPID_API_KEY = process.env.NEXT_PUBLIC_X_RAPIDAPI_KEY || process.env.X_RAPIDAPI_KEY;
 
-// Fallback Data (Just in case the API limit is reached)
+// Fallback Data (Safe Mode)
 const FALLBACK_JOBS = [
   { id: 201, role: "Python Backend Developer", company: "Razorpay", location: "Bangalore", source: "LinkedIn", type: "Full-time", posted: "1h ago", rawDate: new Date() },
   { id: 202, role: "Frontend Engineer (React)", company: "Cred", location: "Bangalore", source: "Indeed", type: "Full-time", posted: "2h ago", rawDate: new Date() },
@@ -37,7 +38,7 @@ export default function JobFeedPage() {
   const [userPrefs, setUserPrefs] = useState<any>(null);
 
   useEffect(() => {
-    // 1. Add this check to make sure we are in the browser
+    // 1. Browser Safety Check
     if (typeof window !== "undefined") {
       
       // Load Profile
@@ -49,6 +50,7 @@ export default function JobFeedPage() {
       if (savedJobs) {
         try {
           const jobs = JSON.parse(savedJobs);
+          // 2. Strict Type Safety Fix for the Build
           const signatures = new Set<string>(
             jobs.map((j: any) => {
                const role = j.title || j.role || ""; 
@@ -87,15 +89,39 @@ export default function JobFeedPage() {
     // 🔥 FIX: Re-read localStorage RIGHT NOW to get the latest Role/Location
     const latestProfile = JSON.parse(localStorage.getItem("user_profile") || "{}");
     
-    // Construct search query from LATEST settings
+    // 👇 BRIDGE FIX: READ ADMIN CONFIG FROM LOCAL STORAGE 👇
+    // This reads the "Power Button" settings you saved in the Admin Panel
+    const adminSettings = JSON.parse(localStorage.getItem("admin_source_config") || "{}");
+    
+    // Check which sources are allowed (Default to TRUE if not set)
+    const enableLinkedIn = adminSettings.linkedin !== false; 
+    const enableNaukri = adminSettings.naukri !== false;
+    const enableIndeed = adminSettings.indeed !== false;
+    const enableInstahyre = adminSettings.instahyre !== false;
+
+    // Helper function to filter jobs
+    const isSourceAllowed = (source: string) => {
+        const s = (source || "").toLowerCase();
+        if (!enableLinkedIn && (s.includes("linkedin"))) return false;
+        if (!enableNaukri && (s.includes("naukri"))) return false;
+        if (!enableIndeed && (s.includes("indeed"))) return false;
+        if (!enableInstahyre && (s.includes("instahyre"))) return false;
+        return true;
+    };
+
+    // Filter Fallback Jobs immediately based on Admin Settings
+    const filteredFallback = FALLBACK_JOBS.filter(job => isSourceAllowed(job.source));
+
+    // Construct search query
     const roleQuery = latestProfile.targetRole || "Software Engineer";
     const locQuery = latestProfile.location || "India";
     const query = `${roleQuery} in ${locQuery}`;
     
     console.log("Searching for:", query);
 
-    if (RAPID_API_KEY === "PASTE_YOUR_RAPIDAPI_KEY_HERE" || !RAPID_API_KEY) {
-        return FALLBACK_JOBS;
+    if (!RAPID_API_KEY || RAPID_API_KEY.includes("PASTE")) {
+        console.warn("Using Fallback Data (API Key missing)");
+        return filteredFallback;
     }
 
     try {
@@ -109,7 +135,7 @@ export default function JobFeedPage() {
 
         const data = await response.json();
         if (data.data && Array.isArray(data.data)) {
-            return data.data.map((j: any, index: number) => ({
+            const jobs = data.data.map((j: any, index: number) => ({
                 id: Date.now() + index,
                 role: j.job_title,
                 company: j.employer_name,
@@ -120,10 +146,14 @@ export default function JobFeedPage() {
                 rawDate: new Date(),
                 url: j.job_apply_link
             }));
+
+            // 👇 APPLY ADMIN FILTER TO LIVE RESULTS 👇
+            return jobs.filter((job: any) => isSourceAllowed(job.source));
         }
-        return FALLBACK_JOBS;
+        return filteredFallback;
     } catch (error) {
-        return FALLBACK_JOBS;
+        console.error("API Error, using fallback", error);
+        return filteredFallback;
     }
   };
 
@@ -132,7 +162,6 @@ export default function JobFeedPage() {
     setIngestionProgress(10);
     setFeed([]);
 
-    // 🔥 FIX: Update the local state with latest profile before scoring
     const latestProfile = JSON.parse(localStorage.getItem("user_profile") || "{}");
     setUserPrefs(latestProfile);
 
@@ -143,7 +172,6 @@ export default function JobFeedPage() {
         const scoredJobs = rawJobs
             .map((job) => ({
               ...job,
-              // Scoring now uses the freshly updated profile
               matchScore: calculateRelevance(job), 
             }))
             .sort((a, b) => b.matchScore - a.matchScore);
